@@ -1,13 +1,35 @@
-import { ensureReady, query } from '@/lib/db';
-export default async function handler(req,res){
-  await ensureReady();
-  if(req.method==='GET'){ const r = await query('SELECT id,title,description,price_cents,image_url,status FROM listings ORDER BY id DESC LIMIT 100'); return res.json(r.rows); }
-  if(req.method==='POST'){
-    const { title, description, price_cents, image_url } = req.body || {};
-    if(!title || !description || !price_cents) return res.status(400).json({error:'Missing fields'});
-    const s = await query('SELECT id FROM users WHERE email=$1',['seller@gemora.test']); const sellerId = s.rows[0]?.id || null;
-    const r = await query('INSERT INTO listings (title,description,price_cents,image_url,seller_id,status) VALUES ($1,$2,$3,$4,$5,'ACTIVE') RETURNING id',[title,description,price_cents,image_url,sellerId]);
-    return res.json({ id: r.rows[0].id });
-  }
-  res.status(405).end();
+import Layout from '@/components/Layout';
+import Link from 'next/link';
+
+export async function getServerSideProps(){
+  const base = process.env.NEXT_PUBLIC_SITE_URL || '';
+  const res = await fetch(`${base}/api/listings`).catch(()=>null);
+  let items = []; if(res && res.ok) items = await res.json();
+  return { props: { items } };
+}
+export default function Home({items}){
+  return (<Layout>
+    <section className="banner">
+      <div className="banner-inner">
+        <h1>Gemora — Where Luxury Finds a New Home</h1>
+        <p>Buy and sell pre‑loved luxury fashion with confidence.</p>
+      </div>
+    </section>
+    <div className="grid">
+      {items.map(x => (
+        <Link key={x.id} href={`/listing/${x.id}`} className="card">
+          <div style={{position:'relative', width:'100%', aspectRatio:'1/1', borderRadius:12, overflow:'hidden', marginBottom:12}}>
+            <img src={x.image_url || '/logo.svg'} alt={x.title} style={{width:'100%', height:'100%', objectFit:'cover'}}/>
+          </div>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+            <div>
+              <div style={{fontWeight:800}}>{x.title}</div>
+              <div className="price">₦{(x.price_cents/100).toLocaleString()}</div>
+            </div>
+            <span className="badge">{x.status}</span>
+          </div>
+        </Link>
+      ))}
+    </div>
+  </Layout>);
 }
